@@ -29,7 +29,7 @@ const ViewModel = class {
 
     constructor(checker, data, _=type(data,"object")){
         super();
-        Object.entries(data).forEach(([k,v])=>{
+        Object.entries(data).forEach(([k,obj])=>{
             if("style,attributes,properties".includes(k)){
                 this[k] = Object.defineProperties(obj,
                     Object.entries(obj).reduce((r,[k,v])=>{
@@ -59,20 +59,17 @@ const ViewModel = class {
         })
     }
 
-
-    constructor(checker, data){
-        Object.entries(data).forEach(([k,v]) => {
-            switch(k){
-                case "styles":this.styles = v; break;
-                case "attributes":this.attributes = v; break;
-                case "properties":this.properties = v; break;
-                case "events":this.events = v; break;
-                default: this[k] = v;
-            }
-        })
-        Object.seal(this)
-    }
 } 
+
+const viewModelValue = class {
+    cat; k; v;
+    constructor(cat, k, v){
+        this.cat = cat;
+        this.k = k;
+        this.v = v;
+        Object.freeze(this)
+    }
+}
 
 const BinderItem = class {
     el;

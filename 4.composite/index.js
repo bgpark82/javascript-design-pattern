@@ -9,13 +9,34 @@ const ViewModelListener = class {
     viewmodelUpdated(updated){throw "override!"}
 }
 
-const ViewModel = class {
-  
+const ViewModel = class extends ViewModelListener{
+    parent = null;
+    subKey = "";
+    static #subjects = new Set;
+    static #inited = false;
+    static notify(vm) {
+        this.#subjects.add(vm);
+        if(this.#inited) return;
+        this.#inited = true;
+        const f = _ => {
+            this.#subjects.forEach(vm => {
+                if(vm.#isUpdated.size){
+                    vm.notify();
+                    vm.#isUpdated.clear();
+                }
+            })
+            requestAnimationFrame(f);
+        }
+        requestAnimationFrame(f);
+    }
+
+
     static get(data){ return new ViewModel(data);}
     
     styles = {}; attributes = {}; properties = {}; events = {};
     #isUpdated = new Set;
     #listeners = new Set;
+    
 
     addListener(v, _=type(v, ViewModelListener)){
         this.#listeners.add(v);
@@ -29,7 +50,7 @@ const ViewModel = class {
 
     constructor(checker, data, _=type(data,"object")){
         super();
-        Object.entries(data).forEach(([k,v])=>{
+        Object.entries(data).forEach(([k,obj])=>{
             if("style,attributes,properties".includes(k)){
                 this[k] = Object.defineProperties(obj,
                     Object.entries(obj).reduce((r,[k,v])=>{
@@ -52,27 +73,36 @@ const ViewModel = class {
                     get:_=>v,
                     set:newV=>{
                         v = newV;
-                        this.#isUpdated.add(new ViewModelValue("",k,v))
+                        this.#isUpdated.add(new ViewModelValue(this.subKey,"",k,v))
                     }
-                })
+                });
+                // composition : 자식 viewmodle의 변화를 수신
+                if(v instanceof ViewModel){
+                    v.parent = this;
+                    v.subKey = k;
+                    v.addListener(this);
+                }
             }
         })
-    }
-
-
-    constructor(checker, data){
-        Object.entries(data).forEach(([k,v]) => {
-            switch(k){
-                case "styles":this.styles = v; break;
-                case "attributes":this.attributes = v; break;
-                case "properties":this.properties = v; break;
-                case "events":this.events = v; break;
-                default: this[k] = v;
-            }
-        })
+        ViewModel.notify(this);
         Object.seal(this)
     }
+
+    viewmodelUpdated(updated){
+        updated.forEach(v =>this.#isUpdated.add(v));
+    }
 } 
+
+const viewModelValue = class {
+    subKey; cat; k; v;
+    constructor(subKey,cat, k, v){
+        this.subKey = subKey;
+        this.cat = cat;
+        this.k = k;
+        this.v = v;
+        Object.freeze(this)
+    }
+}
 
 const BinderItem = class {
     el;
@@ -84,7 +114,7 @@ const BinderItem = class {
     }
 }
 
-const Binder = class {
+const Binder = class extends ViewModelListener{
     #items = new Set;
     #processors = {};
     add(v, _=type(v, BinderItem)){
@@ -103,7 +133,24 @@ const Binder = class {
                    processor.process(vm,el,k,v);
                })
            })
-
+        })
+    }
+    // 자식의 변화를 관찰
+    watch(viewmodel, _=type(viewmodel,ViewModel)){
+        viewmodel.addListener(this);
+        this.render(viewmodel);
+    }
+    unwatch(viewmodel, _=type(viewmodel, ViewModel)){
+        viewmodel.removeListener(this)
+    }
+    viewmodelUpdated(updated){
+        const items = {};
+        this.#items.forEach(item => {
+            items[item.viewmodel] 
+            = [
+                type(viewmodel[item.viewmodel], ViewModel),
+                item.el
+            ]
         })
     }
 }
